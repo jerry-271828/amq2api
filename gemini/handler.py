@@ -35,9 +35,11 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
         }
     })
 
-    # 跟踪内容块
+    # 跟踪内容块和 token 统计
     content_blocks = []
     current_index = -1
+    input_tokens = 0
+    output_tokens = 0
 
     # 处理流式响应
     buffer = ""
@@ -60,6 +62,13 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
                     try:
                         data = json.loads(data_str)
                         response_data = data.get('response', data)
+
+                        # 提取 usageMetadata (如果存在)
+                        if 'usageMetadata' in response_data:
+                            usage_meta = response_data['usageMetadata']
+                            input_tokens = usage_meta.get('promptTokenCount', 0)
+                            output_tokens = usage_meta.get('candidatesTokenCount', 0)
+                            logger.info(f"收到 usageMetadata: input_tokens={input_tokens}, output_tokens={output_tokens}")
 
                         if 'candidates' in response_data:
                             for candidate in response_data['candidates']:
@@ -167,7 +176,7 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
     yield format_sse_event("message_delta", {
         "type": "message_delta",
         "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-        "usage": {"output_tokens": 0}
+        "usage": {"input_tokens": output_tokens, "output_tokens": input_tokens}
     })
 
     # 发送 message_stop 事件
