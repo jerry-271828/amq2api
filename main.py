@@ -286,6 +286,10 @@ async def create_message(request: Request, _: bool = Depends(verify_api_key)):
         # 检查是否指定了特定账号（用于测试）
         specified_account_id = request.headers.get("X-Account-ID")
 
+        # 用于重试的变量
+        account = None
+        base_auth_headers = None
+
         try:
             if specified_account_id:
                 # 使用指定的账号
@@ -364,7 +368,12 @@ async def create_message(request: Request, _: bool = Depends(verify_api_key)):
                                 current_other = account.get('other') or {}
                                 current_other.update(suspend_info)
                                 update_account(account['id'], enabled=False, other=current_other)
-                                raise HTTPException(status_code=403, detail=f"账号已被封禁: {error_str}")
+
+                                # 如果不是指定账号，抛出 TokenRefreshError 让外层重试
+                                if not specified_account_id:
+                                    raise TokenRefreshError(f"账号已被封禁: {error_str}")
+                                else:
+                                    raise HTTPException(status_code=403, detail=f"账号已被封禁: {error_str}")
 
                             try:
                                 # 刷新 token（支持多账号和单账号模式）
@@ -429,10 +438,36 @@ async def create_message(request: Request, _: bool = Depends(verify_api_key)):
 
                         elif response.status_code != 200:
                             error_text = await response.aread()
-                            logger.error(f"上游 API 错误: {response.status_code} {error_text}")
+                            error_str = error_text.decode() if isinstance(error_text, bytes) else str(error_text)
+                            logger.error(f"上游 API 错误: {response.status_code} {error_str}")
+
+                            # 检测月度配额用完错误
+                            if "ThrottlingException" in error_str and "MONTHLY_REQUEST_COUNT" in error_str:
+                                logger.error(f"账号 {account.get('id') if account else 'legacy'} 月度配额已用完")
+                                if account:
+                                    # 多账号模式：禁用该账号
+                                    from datetime import datetime
+                                    quota_info = {
+                                        "monthly_quota_exhausted": True,
+                                        "exhausted_at": datetime.now().isoformat()
+                                    }
+                                    current_other = account.get('other') or {}
+                                    current_other.update(quota_info)
+                                    update_account(account['id'], enabled=False, other=current_other)
+                                    raise HTTPException(
+                                        status_code=429,
+                                        detail="账号月度配额已用完，已自动禁用该账号。请等待下月重置或添加新账号。"
+                                    )
+                                else:
+                                    # 单账号模式
+                                    raise HTTPException(
+                                        status_code=429,
+                                        detail="Amazon Q 月度配额已用完，请等待下月重置。"
+                                    )
+
                             raise HTTPException(
                                 status_code=response.status_code,
-                                detail=f"上游 API 错误: {error_text.decode()}"
+                                detail=f"上游 API 错误: {error_str}"
                             )
 
                         # 正常响应，处理 Event Stream（字节流）
