@@ -24,6 +24,10 @@ from models import (
 
 logger = logging.getLogger(__name__)
 
+THINKING_START_TAG = "<thinking>"
+THINKING_END_TAG = "</thinking>"
+THINKING_HINT = "<thinking_mode>interleaved</thinking_mode><max_thinking_length>16000</max_thinking_length>"
+
 
 def get_current_timestamp() -> str:
     """获取当前时间戳（Amazon Q 格式）"""
@@ -130,6 +134,8 @@ def convert_claude_to_codewhisperer_request(
                 if isinstance(block, dict):
                     if block.get("type") == "text":
                         text_parts.append(block.get("text", ""))
+                    elif block.get("type") == "thinking":
+                        text_parts.append(f"{THINKING_START_TAG}{block.get('thinking', '')}{THINKING_END_TAG}")
                     elif block.get("type") == "tool_result":
                         # 提取 tool_result
                         has_tool_result = True
@@ -194,6 +200,19 @@ def convert_claude_to_codewhisperer_request(
         tools=codewhisperer_tools,
         toolResults=tool_results  # 包含从消息中提取的 tool_results
     )
+
+    # 检测是否启用 thinking 模式
+    thinking_enabled = False
+    thinking_param = getattr(claude_req, 'thinking', None)
+    if thinking_param:
+        if isinstance(thinking_param, bool):
+            thinking_enabled = thinking_param
+        elif isinstance(thinking_param, dict):
+            thinking_enabled = thinking_param.get('type') == 'enabled' or thinking_param.get('enabled', False)
+
+    # 如果启用 thinking，在 prompt_content 末尾添加 THINKING_HINT
+    if thinking_enabled and prompt_content:
+        prompt_content = f"{prompt_content}\n{THINKING_HINT}"
 
     # 步骤 5: 格式化内容（添加上下文信息）
     # 只有在非 tool result 消息时才添加模板格式

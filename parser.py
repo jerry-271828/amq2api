@@ -184,22 +184,22 @@ def build_claude_message_start_event(conversation_id: str, model: str = "claude-
     return build_claude_sse_event("message_start", data)
 
 
-def build_claude_content_block_start_event(index: int) -> str:
+def build_claude_content_block_start_event(index: int, content_type: str = "text") -> str:
     """构建 content_block_start 事件"""
     data = {
         "type": "content_block_start",
         "index": index,
-        "content_block": {"type": "text", "text": ""}
+        "content_block": {"type": content_type, content_type: ""}
     }
     return build_claude_sse_event("content_block_start", data)
 
 
-def build_claude_content_block_delta_event(index: int, text: str) -> str:
+def build_claude_content_block_delta_event(index: int, text: str, delta_type: str = "text_delta", field_name: str = "text") -> str:
     """构建 content_block_delta 事件"""
     data = {
         "type": "content_block_delta",
         "index": index,
-        "delta": {"type": "text_delta", "text": text}
+        "delta": {"type": delta_type, field_name: text}
     }
     return build_claude_sse_event("content_block_delta", data)
 
