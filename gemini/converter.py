@@ -32,15 +32,25 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
             parts = [{"text": msg.content}]
         elif isinstance(msg.content, list):
             parts = []
+            thinking_parts = []
+            text_parts = []
+            tool_parts = []
+
             for item in msg.content:
                 if isinstance(item, dict):
-                    if item.get("type") == "text":
-                        parts.append({"text": item.get("text", "")})
+                    if item.get("type") == "thinking":
+                        # 处理 thinking 内容块，添加 thought 标记
+                        thinking_parts.append({
+                            "text": item.get("thinking", ""),
+                            "thought": True
+                        })
+                    elif item.get("type") == "text":
+                        text_parts.append({"text": item.get("text", "")})
                     elif item.get("type") == "image":
                         # 处理图片
                         source = item.get("source", {})
                         if source.get("type") == "base64":
-                            parts.append({
+                            text_parts.append({
                                 "inlineData": {
                                     "mimeType": source.get("media_type", "image/png"),
                                     "data": source.get("data", "")
@@ -48,7 +58,7 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
                             })
                     elif item.get("type") == "tool_use":
                         # 处理工具调用
-                        parts.append({
+                        tool_parts.append({
                             "functionCall": {
                                 "id": item.get("id"),
                                 "name": item.get("name"),
@@ -60,7 +70,7 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
                         content = item.get("content", "")
                         if isinstance(content, list):
                             content = content[0].get("text", "") if content else ""
-                        parts.append({
+                        tool_parts.append({
                             "functionResponse": {
                                 "id": item.get("tool_use_id"),
                                 "name": item.get("name", ""),
@@ -68,7 +78,10 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
                             }
                         })
                 else:
-                    parts.append({"text": str(item)})
+                    text_parts.append({"text": str(item)})
+
+            # 按照 Gemini 要求的顺序组合: thinking -> text -> tool
+            parts = thinking_parts + text_parts + tool_parts
         else:
             parts = [{"text": str(msg.content)}]
 
@@ -92,12 +105,16 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
                 "topK": 40,
                 "candidateCount": 1,
                 "maxOutputTokens": claude_req.max_tokens,
-                "stopSequences": ["<|user|>", "<|bot|>", "<|context_request|>", "<|endoftext|>", "<|end_of_turn|>"]
+                "stopSequences": ["<|user|>", "<|bot|>", "<|context_request|>", "<|endoftext|>", "<|end_of_turn|>"],
+                "thinkingConfig": {
+                    "includeThoughts": False,
+                    "thinkingBudget": 1024
+                }
             },
             "sessionId": "-3750763034362895578",
         },
         "model": map_claude_model_to_gemini(claude_req.model),
-        "userAgent": "antigravity/1.11.3 darwin/arm64",
+        "userAgent": "antigravity",
         "requestType": "agent"
     }
 

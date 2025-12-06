@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Amazon Q to Claude API Proxy - 将 Claude API 请求转换为 Amazon Q/CodeWhisperer 请求的代理服务。
 
-## 核心架构
+## 特别提醒
+
+查找代码时请使用acemcp来查找代码
 
 ### 请求流程
 ```

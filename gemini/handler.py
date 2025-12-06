@@ -40,6 +40,8 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
     current_index = -1
     input_tokens = 0
     output_tokens = 0
+    content_block_started = False
+    content_block_stop_sent = False
 
     # 处理流式响应
     buffer = ""
@@ -69,6 +71,7 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
                     continue
 
             buffer += text
+            logger.info(text)
 
             while '\r\n\r\n' in buffer:
                 event_text, buffer = buffer.split('\r\n\r\n', 1)
@@ -95,9 +98,40 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
                                 parts = content.get('parts', [])
 
                                 for part in parts:
+                                    # 处理 thinking 内容
+                                    if part.get('thought'):
+                                        if 'text' in part and part['text']:
+                                            # 开启 thinking 块
+                                            if not content_block_started:
+                                                current_index += 1
+                                                content_blocks.append({'type': 'text'})
+                                                yield format_sse_event("content_block_start", {
+                                                    "type": "content_block_start",
+                                                    "index": current_index,
+                                                    "content_block": {"type": "thinking", 'thinking': ""}
+                                                })
+                                                content_block_started = True
+                                                content_block_stop_sent = False
+
+                                            # 发送 thinking delta
+                                            yield format_sse_event("content_block_delta", {
+                                                "type": "content_block_delta",
+                                                "index": current_index,
+                                                "delta": {"type": "thinking_delta", "thinking": part['text']}
+                                            })
+
+                                        # thinking 结束标记
+                                        if 'thoughtSignature' in part:
+                                            if content_block_started and not content_block_stop_sent:
+                                                yield format_sse_event("content_block_stop", {
+                                                    "type": "content_block_stop",
+                                                    "index": current_index
+                                                })
+                                                content_block_stop_sent = True
+                                                content_block_started = False
                                     # 处理文本内容
-                                    if 'text' in part and part['text']:
-                                        if current_index == -1 or content_blocks[current_index]['type'] != 'text':
+                                    elif 'text' in part and part['text']:
+                                        if not content_block_started or (current_index >= 0 and content_blocks[current_index]['type'] != 'text'):
                                             current_index += 1
                                             content_blocks.append({'type': 'text'})
                                             yield format_sse_event("content_block_start", {
@@ -105,6 +139,8 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
                                                 "index": current_index,
                                                 "content_block": {"type": "text", "text": ""}
                                             })
+                                            content_block_started = True
+                                            content_block_stop_sent = False
 
                                         yield format_sse_event("content_block_delta", {
                                             "type": "content_block_delta",
@@ -195,7 +231,7 @@ async def handle_gemini_stream(response_stream: AsyncIterator[bytes], model: str
     yield format_sse_event("message_delta", {
         "type": "message_delta",
         "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-        "usage": {"input_tokens": output_tokens, "output_tokens": input_tokens}
+        "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens}
     })
 
     # 发送 message_stop 事件

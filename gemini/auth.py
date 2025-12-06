@@ -13,13 +13,14 @@ logger = logging.getLogger(__name__)
 class GeminiTokenManager:
     """Gemini Token 管理器"""
 
-    def __init__(self, client_id: str, client_secret: str, refresh_token: str, api_endpoint: str):
+    def __init__(self, client_id: str, client_secret: str, refresh_token: str, api_endpoint: str,
+                 access_token: Optional[str] = None, token_expires_at: Optional[datetime] = None):
         self.client_id = client_id
         self.client_secret = client_secret
         self.refresh_token = refresh_token
         self.api_endpoint = api_endpoint
-        self.access_token: Optional[str] = None
-        self.token_expires_at: Optional[datetime] = None
+        self.access_token: Optional[str] = access_token
+        self.token_expires_at: Optional[datetime] = token_expires_at
         self.project_id: Optional[str] = None
         self.token_endpoint = "https://oauth2.googleapis.com/token"
 
@@ -27,6 +28,7 @@ class GeminiTokenManager:
         """获取有效的 access token，如果过期则自动刷新"""
         if self.access_token and self.token_expires_at:
             if datetime.now() < self.token_expires_at - timedelta(minutes=5):
+                logger.info("使用缓存的 Gemini access token")
                 return self.access_token
 
         await self.refresh_access_token()
@@ -44,7 +46,8 @@ class GeminiTokenManager:
                     "client_secret": self.client_secret,
                     "grant_type": "refresh_token",
                     "refresh_token": unquote(self.refresh_token)
-                }
+                },
+                timeout=20
             )
 
             if response.status_code != 200:
