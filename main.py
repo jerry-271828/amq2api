@@ -535,17 +535,61 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
                 raise HTTPException(status_code=503, detail=f"没有可用的 Gemini 账号支持模型 {claude_req.model}")
             logger.info(f"使用随机 Gemini 账号: {account['label']} (ID: {account['id']}) - 模型: {claude_req.model}")
 
-        # 初始化 Token 管理器
+        # 检查并使用数据库中的 access token
         other = account.get("other") or {}
+        if isinstance(other, str):
+            import json
+            try:
+                other = json.loads(other)
+            except json.JSONDecodeError:
+                other = {}
+
+        access_token = account.get("accessToken")
+        token_expires_at = None
+
+        # 从 other 字段读取过期时间
+        if access_token:
+            if other.get("token_expires_at"):
+                try:
+                    from datetime import datetime, timedelta
+                    token_expires_at = datetime.fromisoformat(other["token_expires_at"])
+                    if datetime.now() >= token_expires_at - timedelta(minutes=5):
+                        logger.info(f"Gemini access token 即将过期，需要刷新")
+                        access_token = None
+                        token_expires_at = None
+                except Exception as e:
+                    logger.warning(f"解析 Gemini token 过期时间失败: {e}")
+                    access_token = None
+                    token_expires_at = None
+            else:
+                # 如果有 access_token 但没有过期时间,清空 token 强制刷新一次
+                logger.info(f"Gemini access token 缺少过期时间,强制刷新")
+                access_token = None
+                token_expires_at = None
+
+        # 初始化 Token 管理器
         token_manager = GeminiTokenManager(
             client_id=account["clientId"],
             client_secret=account["clientSecret"],
             refresh_token=account["refreshToken"],
-            api_endpoint=other.get("api_endpoint", "https://daily-cloudcode-pa.sandbox.googleapis.com")
+            api_endpoint=other.get("api_endpoint", "https://daily-cloudcode-pa.sandbox.googleapis.com"),
+            access_token=access_token,
+            token_expires_at=token_expires_at
         )
+
+        # 确保 token 有效（如果需要会自动刷新）
+        await token_manager.get_access_token()
 
         # 获取项目 ID
         project_id = other.get("project") or await token_manager.get_project_id()
+
+        # 如果 token 被刷新，更新数据库
+        if token_manager.access_token != access_token:
+            from account_manager import update_account_tokens
+            # 更新 other 字段，保存过期时间
+            other["token_expires_at"] = token_manager.token_expires_at.isoformat() if token_manager.token_expires_at else None
+            update_account(account["id"], access_token=token_manager.access_token, other=other)
+            logger.info(f"Gemini access token 已更新到数据库")
 
         # 转换为 Gemini 请求
         gemini_request = convert_claude_to_gemini(
@@ -774,6 +818,13 @@ async def manual_refresh_endpoint(account_id: str, _: bool = Depends(verify_admi
         if account_type == "gemini":
             # Gemini 账号刷新
             other = account.get("other") or {}
+            if isinstance(other, str):
+                import json
+                try:
+                    other = json.loads(other)
+                except json.JSONDecodeError:
+                    other = {}
+
             token_manager = GeminiTokenManager(
                 client_id=account["clientId"],
                 client_secret=account["clientSecret"],
@@ -782,12 +833,12 @@ async def manual_refresh_endpoint(account_id: str, _: bool = Depends(verify_admi
             )
             await token_manager.refresh_access_token()
 
-            # 更新数据库
-            from account_manager import update_account_tokens
-            refreshed_account = update_account_tokens(
+            # 更新数据库，保存 access_token 和过期时间
+            other["token_expires_at"] = token_manager.token_expires_at.isoformat() if token_manager.token_expires_at else None
+            refreshed_account = update_account(
                 account_id=account_id,
                 access_token=token_manager.access_token,
-                status="success"
+                other=other
             )
             return JSONResponse(content=refreshed_account)
         else:
