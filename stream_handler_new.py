@@ -121,7 +121,7 @@ class AmazonQStreamHandler:
 
                 # 记录收到的事件类型
                 event_type = event_info.get('event_type')
-                logger.info(f"收到 Amazon Q 事件: {event_type}")
+                # logger.info(f"收到 Amazon Q 事件: {event_type}")
 
                 # 记录完整的事件信息（调试级别）
                 import json
@@ -347,8 +347,8 @@ class AmazonQStreamHandler:
             tool_input = payload.get('input', {})
             is_stop = payload.get('stop', False)
 
-            logger.info(f"Tool use 事件 - ID: {tool_use_id}, Name: {tool_name}, Stop: {is_stop}")
-            logger.debug(f"Tool input: {tool_input}")
+            # logger.info(f"Tool use 事件 - ID: {tool_use_id}, Name: {tool_name}, Stop: {is_stop}")
+            # logger.debug(f"Tool input: {tool_input}")
 
             # 添加去重机制：检查是否已经处理过这个 tool_use_id
             # if tool_use_id and not is_stop:

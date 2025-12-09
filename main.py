@@ -236,17 +236,17 @@ async def create_message(request: Request, _: bool = Depends(verify_api_key)):
 
         if history:
             # 记录原始历史记录
-            logger.info("=" * 80)
-            logger.info("原始历史记录:")
-            log_history_summary(history, prefix="[原始] ")
+            # logger.info("=" * 80)
+            # logger.info("原始历史记录:")
+            # log_history_summary(history, prefix="[原始] ")
 
             # 合并连续的用户消息
             processed_history = process_claude_history_for_amazonq(history)
 
             # 记录处理后的历史记录
-            logger.info("=" * 80)
-            logger.info("处理后的历史记录:")
-            log_history_summary(processed_history, prefix="[处理后] ")
+            # logger.info("=" * 80)
+            # logger.info("处理后的历史记录:")
+            # log_history_summary(processed_history, prefix="[处理后] ")
 
             # 更新请求体
             conversation_state["history"] = processed_history
@@ -614,12 +614,14 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
         async def gemini_byte_stream():
             async with httpx.AsyncClient(timeout=300.0) as client:
                 try:
+                    logger.info(f"[HTTP] 开始请求 Gemini API: {api_url}")
                     async with client.stream(
                         "POST",
                         api_url,
                         json=gemini_request,
                         headers=headers
                     ) as response:
+                        logger.info(f"[HTTP] 收到响应: status_code={response.status_code}")
                         if response.status_code != 200:
                             error_text = await response.aread()
                             error_str = error_text.decode() if isinstance(error_text, bytes) else str(error_text)
@@ -695,9 +697,18 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
                             )
 
                         # 返回字节流
+                        logger.info("[HTTP] 开始迭代字节流")
+                        chunk_count = 0
+                        total_bytes = 0
                         async for chunk in response.aiter_bytes():
+                            chunk_count += 1
                             if chunk:
+                                total_bytes += len(chunk)
+                                logger.info(f"[HTTP] Chunk {chunk_count}: {len(chunk)} 字节")
                                 yield chunk
+                            else:
+                                logger.debug(f"[HTTP] Chunk {chunk_count}: 空 chunk")
+                        logger.info(f"[HTTP] 字节流结束: 共 {chunk_count} 个 chunk, 总计 {total_bytes} 字节")
 
                 except httpx.RequestError as e:
                     logger.error(f"请求错误: {e}")
