@@ -623,6 +623,16 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
                     ) as response:
                         logger.info(f"[HTTP] 收到响应: status_code={response.status_code}")
                         logger.info(f"[HTTP] 响应头: {dict(response.headers)}")
+
+                        # 检测 Gemini API 空响应问题
+                        content_length = response.headers.get('content-length', '')
+                        if content_length == '0':
+                            logger.error("[HTTP] Gemini API 返回空响应 (content-length: 0)")
+                            raise HTTPException(
+                                status_code=502,
+                                detail="Gemini API 返回空响应，请重试"
+                            )
+
                         if response.status_code != 200:
                             error_text = await response.aread()
                             error_str = error_text.decode() if isinstance(error_text, bytes) else str(error_text)
