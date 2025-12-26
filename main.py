@@ -96,8 +96,8 @@ async def verify_admin_key(x_admin_key: Optional[str] = Header(None)):
 
 
 # API Key 鉴权依赖
-async def verify_api_key(x_api_key: Optional[str] = Header(None)):
-    """验证 API Key（Anthropic API 格式）"""
+async def verify_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):
+    """验证 API Key（支持 x-api-key 和 Authorization: Bearer）"""
     import os
     api_key = os.getenv("API_KEY")
 
@@ -105,11 +105,17 @@ async def verify_api_key(x_api_key: Optional[str] = Header(None)):
     if not api_key:
         return True
 
-    # 如果设置了 API_KEY，则必须验证
-    if not x_api_key or x_api_key != api_key:
+    # 从 Authorization header 提取 Bearer token
+    bearer_token = None
+    if authorization and authorization.startswith("Bearer "):
+        bearer_token = authorization[7:]
+
+    # 如果设置了 API_KEY，则必须验证（x-api-key 或 Bearer token）
+    provided_key = x_api_key or bearer_token
+    if not provided_key or provided_key != api_key:
         raise HTTPException(
             status_code=401,
-            detail="未授权：需要有效的 API Key。请在请求头中添加 x-api-key"
+            detail="未授权：需要有效的 API Key"
         )
     return True
 
