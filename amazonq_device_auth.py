@@ -43,7 +43,11 @@ async def register_client() -> Dict[str, str]:
             json={
                 "clientName": "amq2api-web-login",
                 "clientType": "confidential",
-                "scopes": ["codewhisperer:completions"]
+                "scopes": [
+                    "codewhisperer:completions",
+                    "codewhisperer:analysis",
+                    "codewhisperer:conversations",
+                ]
             },
             headers={"Content-Type": "application/json"}
         )
