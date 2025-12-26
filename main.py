@@ -22,6 +22,7 @@ from converter import convert_claude_to_codewhisperer_request, codewhisperer_req
 from stream_handler_new import handle_amazonq_stream
 from stream_utils import format_sse_error_event
 from message_processor import process_claude_history_for_amazonq, log_history_summary
+from amazonq_device_auth import create_session as create_device_auth_session, poll_session, get_session
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 from fastapi.responses import JSONResponse, FileResponse
@@ -1551,6 +1552,72 @@ async def get_gemini_accounts():
     except Exception as e:
         logger.error(f"获取 Gemini 账号列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取账号列表失败: {str(e)}")
+
+
+# ==================== Amazon Q 账号登录 ====================
+
+@app.get("/amazonq-login", response_class=FileResponse)
+async def amazonq_login_page():
+    """Amazon Q 账号登录页面"""
+    from pathlib import Path
+    frontend_path = Path(__file__).parent / "frontend" / "amazonq-login.html"
+    if not frontend_path.exists():
+        raise HTTPException(status_code=404, detail="页面不存在")
+    return FileResponse(str(frontend_path))
+
+
+@app.post("/api/amazonq/device-auth/start")
+async def start_amazonq_device_auth():
+    """启动 Amazon Q 设备授权流程"""
+    try:
+        from datetime import datetime
+        session = await create_device_auth_session()
+        return {
+            "session_id": session.session_id,
+            "user_code": session.user_code,
+            "verification_uri": session.verification_uri,
+            "verification_uri_complete": session.verification_uri_complete,
+            "expires_in": int((session.expires_at - datetime.now()).total_seconds()),
+            "interval": session.interval
+        }
+    except Exception as e:
+        logger.error(f"启动设备授权失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/amazonq/device-auth/poll/{session_id}")
+async def poll_amazonq_device_auth(session_id: str):
+    """轮询设备授权状态"""
+    try:
+        result = await poll_session(session_id)
+        return result
+    except Exception as e:
+        logger.error(f"轮询设备授权失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/amazonq/accounts")
+async def get_amazonq_accounts():
+    """获取 Amazon Q 账号列表"""
+    try:
+        accounts = list_enabled_accounts(account_type="amazonq")
+        return {
+            "activeCount": len([a for a in accounts if a.get("enabled")]),
+            "totalCount": len(accounts),
+            "accounts": [
+                {
+                    "id": acc.get("id"),
+                    "label": acc.get("label", "未命名"),
+                    "enabled": acc.get("enabled", False),
+                    "last_refresh_status": acc.get("last_refresh_status"),
+                    "created_at": acc.get("created_at")
+                }
+                for acc in accounts
+            ]
+        }
+    except Exception as e:
+        logger.error(f"获取 Amazon Q 账号列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def get_base_url() -> str:
