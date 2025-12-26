@@ -100,6 +100,35 @@ async def test_parser():
         return False
 
 
+async def test_opus_model_mapping():
+    """测试 Opus 模型映射"""
+    print("\n测试 Opus 模型映射...")
+    try:
+        from converter import map_claude_model_to_amazonq
+
+        # 测试各种 Opus 模型名称
+        test_cases = [
+            ("claude-opus-4.5", "claude-opus-4.5"),
+            ("claude-opus-4-5", "claude-opus-4.5"),
+            ("claude-opus-4", "claude-opus-4.5"),
+            ("Claude-Opus-4.5", "claude-opus-4.5"),  # 大小写测试
+            ("claude-3-opus-20240229", "claude-opus-4.5"),  # Legacy
+        ]
+
+        for input_model, expected_output in test_cases:
+            result = map_claude_model_to_amazonq(input_model)
+            assert result == expected_output, f"映射失败: {input_model} -> {result} (期望: {expected_output})"
+            print(f"  ✓ {input_model} -> {result}")
+
+        print(f"✓ Opus 模型映射测试通过")
+        return True
+    except Exception as e:
+        print(f"✗ Opus 模型映射测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 async def main():
     """运行所有测试"""
     print("=" * 50)
@@ -113,6 +142,7 @@ async def main():
     results.append(await test_models())
     results.append(await test_converter())
     results.append(await test_parser())
+    results.append(await test_opus_model_mapping())
 
     # 汇总结果
     print("\n" + "=" * 50)

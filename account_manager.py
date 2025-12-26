@@ -108,7 +108,8 @@ def _init_default_config(conn):
         "amazonq_only_models": json.dumps([
             "claude-sonnet-4",
             "claude-sonnet-4.5",
-            "claude-haiku-4.5"
+            "claude-haiku-4.5",
+            "claude-opus-4.5"
         ]),
         "supported_models": json.dumps([
             "gemini-2.5-flash", "gemini-2.5-flash-thinking", "gemini-2.5-pro",

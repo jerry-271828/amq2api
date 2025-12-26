@@ -94,7 +94,7 @@ class UserInputMessage:
     """用户输入消息"""
     content: str
     userInputMessageContext: UserInputMessageContext
-    origin: str = "CLI"
+    origin: str = "KIRO_CLI"
     modelId: str = "claude-sonnet-4.5"
     images: Optional[List[Dict[str, Any]]] = None  # 图片列表
 

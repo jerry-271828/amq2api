@@ -36,7 +36,7 @@ def merge_user_messages(user_messages: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         # 保留第一个消息的 origin
         if base_origin is None:
-            base_origin = msg.get("origin", "CLI")
+            base_origin = msg.get("origin", "KIRO_CLI")
 
         # 保留第一个消息的 modelId
         if base_model is None and "modelId" in msg:
@@ -53,7 +53,7 @@ def merge_user_messages(user_messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     merged_msg = {
         "content": merged_content,
         "userInputMessageContext": base_context or {},
-        "origin": base_origin or "CLI"
+        "origin": base_origin or "KIRO_CLI"
     }
 
     # 如果原始消息有 modelId，也保留
