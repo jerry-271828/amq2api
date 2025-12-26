@@ -42,7 +42,7 @@ async def register_client() -> Dict[str, str]:
             f"{SSO_OIDC_ENDPOINT}/client/register",
             json={
                 "clientName": "amq2api-web-login",
-                "clientType": "public",
+                "clientType": "confidential",
                 "scopes": ["codewhisperer:completions"]
             },
             headers={"Content-Type": "application/json"}

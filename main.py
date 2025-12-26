@@ -96,9 +96,14 @@ async def verify_admin_key(x_admin_key: Optional[str] = Header(None)):
 
 
 # API Key 鉴权依赖
-async def verify_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):
+async def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):
     """验证 API Key（支持 x-api-key 和 Authorization: Bearer）"""
     import os
+
+    # 如果指定了账号 ID（管理员测试），跳过 API Key 验证
+    if request.headers.get("X-Account-ID"):
+        return True
+
     api_key = os.getenv("API_KEY")
 
     # 如果没有设置 API_KEY，则不需要验证
